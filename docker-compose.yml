@@ -5,7 +5,6 @@ services:
     image: wodby/mariadb:$MARIADB_TAG
     environment:
       MYSQL_ROOT_PASSWORD: $DB_ROOT_PASSWORD
-      MYSQL_DATABASE: $DB_NAME
       MYSQL_USER: $DB_USER
       MYSQL_PASSWORD: $DB_PASSWORD
 
@@ -21,7 +20,7 @@ services:
     labels:
       - 'traefik.backend=pma'
       - 'traefik.port=80'
-      - 'traefik.frontend.rule=Host:pma.${PROJECT_BASE_URL}'
+      - 'traefik.frontend.rule=Host:pma.${PROJECT_BASE_URL_1}'
 
   php:
     image: wodby/drupal:$DRUPAL_TAG
@@ -30,8 +29,8 @@ services:
       DEBUG: 1
       DRUPAL_VERSION: 8
       DB_HOST: $DB_HOST
-      DB_NAME: $DB_NAME
       DB_USER: $DB_USER
+      DB_NAME: $DB_NAME
       DB_PASSWORD: $DB_PASSWORD
       DB_DRIVER: $DB_DRIVER
       PHP_SENDMAIL_PATH: '/bin/true'
@@ -49,9 +48,9 @@ services:
       - ./tests.sh:/usr/local/bin/tests.sh
       - ./test.settings.php:/var/www/html/web/sites/default/test.settings.php
 
-  apache:
+  apache1:
     image: wodby/php-apache:$APACHE_TAG
-    container_name: "${PROJECT_NAME}_apache"
+    container_name: "${PROJECT_NAME}_apache_1"
     depends_on:
       - php
     environment:
@@ -64,7 +63,24 @@ services:
     labels:
       - 'traefik.backend=apache'
       - 'traefik.port=80'
-      - 'traefik.frontend.rule=Host:${PROJECT_BASE_URL}'
+      - 'traefik.frontend.rule=Host:${PROJECT_BASE_URL_1}'
+
+  apache2:
+    image: wodby/php-apache:$APACHE_TAG
+    container_name: "${PROJECT_NAME}_apache_2"
+    depends_on:
+      - php
+    environment:
+      APACHE_LOG_LEVEL: debug
+      APACHE_BACKEND_HOST: php
+      APACHE_SERVER_ROOT: /var/www/html/
+    volumes:
+      - ./docroot:/var/www/html
+      - ./docroot:/var/www/html:cached # User-guided caching
+    labels:
+      - 'traefik.backend=apache'
+      - 'traefik.port=80'
+      - 'traefik.frontend.rule=Host:${PROJECT_BASE_URL_2}'
 
   redis:
     image: wodby/redis:$REDIS_TAG
