@@ -1,0 +1,103 @@
+version: "2"
+
+services:
+  mariadb:
+    image: wodby/mariadb:$MARIADB_TAG
+    environment:
+      MYSQL_ROOT_PASSWORD: $DB_ROOT_PASSWORD
+      MYSQL_DATABASE: $DB_NAME
+      MYSQL_USER: $DB_USER
+      MYSQL_PASSWORD: $DB_PASSWORD
+
+  pma:
+    image: phpmyadmin/phpmyadmin
+    container_name: "${PROJECT_NAME}_pma"
+    environment:
+      PMA_HOST: $DB_HOST
+      PMA_USER: $DB_USER
+      PMA_PASSWORD: $DB_PASSWORD
+      PHP_UPLOAD_MAX_FILESIZE: 1G
+      PHP_MAX_INPUT_VARS: 1G
+    labels:
+      - 'traefik.backend=pma'
+      - 'traefik.port=80'
+      - 'traefik.frontend.rule=Host:pma.${PROJECT_BASE_URL}'
+
+  php:
+    image: wodby/drupal:$DRUPAL_TAG
+    environment:
+      WODBY_APP_NAME: drupal
+      DEBUG: 1
+      DRUPAL_VERSION: 8
+      DB_HOST: $DB_HOST
+      DB_NAME: $DB_NAME
+      DB_USER: $DB_USER
+      DB_PASSWORD: $DB_PASSWORD
+      DB_DRIVER: $DB_DRIVER
+      PHP_SENDMAIL_PATH: '/bin/true'
+      ## Read instructions at https://wodby.com/stacks/drupal/docs/local/xdebug/
+      PHP_XDEBUG: 1
+      PHP_XDEBUG_DEFAULT_ENABLE: 1
+      PHP_XDEBUG_REMOTE_CONNECT_BACK: 0
+      PHP_IDE_CONFIG: serverName=my-ide
+      PHP_XDEBUG_REMOTE_HOST: host.docker.internal # Docker 18.03+ & Linux/Mac/Win
+      #PHP_XDEBUG_REMOTE_HOST: 172.17.0.1 # Linux, Docker < 18.03
+      PHP_XDEBUG_REMOTE_HOST: 10.254.254.254 # macOS, Docker < 18.03
+      #PHP_XDEBUG_REMOTE_HOST: 10.0.75.1 # Windows, Docker < 18.03
+    volumes:
+      - ./docroot:/var/www/html
+      - ./tests.sh:/usr/local/bin/tests.sh
+      - ./test.settings.php:/var/www/html/web/sites/default/test.settings.php
+
+  apache:
+    image: wodby/php-apache:$APACHE_TAG
+    container_name: "${PROJECT_NAME}_apache"
+    depends_on:
+      - php
+    environment:
+      APACHE_LOG_LEVEL: debug
+      APACHE_BACKEND_HOST: php
+      APACHE_SERVER_ROOT: /var/www/html/
+    volumes:
+      - ./docroot:/var/www/html
+      - ./docroot:/var/www/html:cached # User-guided caching
+    labels:
+      - 'traefik.backend=apache'
+      - 'traefik.port=80'
+      - 'traefik.frontend.rule=Host:${PROJECT_BASE_URL}'
+
+  redis:
+    image: wodby/redis:$REDIS_TAG
+
+  elasticsearch:
+    image: wodby/elasticsearch:$ELASTICSEARCH_TAG
+    environment:
+      ES_JAVA_OPTS: "-Xms500m -Xmx500m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 9200:9200
+
+  kibana:
+    image: wodby/kibana:$KIBANA_TAG
+    depends_on:
+      - elasticsearch
+    labels:
+      - 'traefik.backend=kibana'
+      - 'traefik.port=5601'
+      - 'traefik.frontend.rule=Host:kibana.php.docker.localhost'
+
+  traefik:
+    image: traefik
+    container_name: "${PROJECT_NAME}_traefik"
+    command: -c /dev/null --web --docker --logLevel=INFO
+    ports:
+      - '8000:80'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  codebase:
+
